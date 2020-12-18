@@ -14,6 +14,7 @@ class VoiceState {
   constructor() {
     this.connection = null;
     this.queue = [];
+    this.isPlaying = false;
   }
 
   async join(member) {
@@ -39,31 +40,50 @@ class VoiceState {
     return 'you know it is not my fault you do not like the song. But whatever I will leave anyway.';
   }
 
-  async play(member, audio) {
+  async play(member, audio, message) {
     let channel = member.voice.channel;
-    if (!channel) return 'please join a voice channel first.';
+    if (!channel) message.reply('please join a voice channel first.');
 
     if (!this.inUse()) {
       await this.join(member);
     }
 
-    if (!this.inChannel(member)) return 'we are not in the same voice channel.';
+    if (!this.inChannel(member)) message.reply('we are not in the same voice channel.');
 
-    this.queue.push(audio);
+    if (this.queue.length === 0 && !this.isPlaying) {
+      this.queue.push(audio);
+    } else if (this.queue.length !== 0 || this.isPlaying) {
+      this.queue.push(audio);
+      message.channel.send(`${audio} was added to the audio queue.`);
 
-    if (this.queue.length !== 1) return `${audio} was added to the audio queue.`;
+      return;
+    }
+    
+    this.next(message);
+  }
 
-    let dispatcher = this.connection.play(ytdl(audio, {filter: 'audioonly'}));
+  next(message) {
+    let audio = this.queue.shift();
+
+    if (audio === undefined) {
+      this.isPlaying = false;
+      message.channel.send('Congratulations you reached the end of the audio queue.');
+
+      return;
+    }
+
+    this.isPlaying = true;
+
+    const youtubeAudio = ytdl(audio, {
+      filter: 'audioonly',
+    });
+    const dispatcher = this.connection.play(youtubeAudio);
+
     dispatcher.on('finish', () => {
-      let nextAudio = this.queue.shift();
-      if (nextAudio === undefined) {
-        return;
-      }
-
-      dispatcher = this.connection.play(ytdl(nextAudio, {filter: 'audioonly'}));
+      this.next(message);
     });
 
-    return `now playing ${audio}. Take it away, honey!`;
+    message.channel.send(`Now playing ${audio}. Take it away, honey!`);
   }
 
   inUse() {
@@ -73,6 +93,8 @@ class VoiceState {
 
     if (this.connection.status === 4) {
       this.connection = null;
+      this.queue = [];
+
       return false;
     }
 

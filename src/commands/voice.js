@@ -30,7 +30,7 @@ module.exports = {
 
         let audio = args[1];
 
-        message.reply(await voiceState.play(member, audio));
+        await voiceState.play(member, audio, message);
         break;
     }
   },
